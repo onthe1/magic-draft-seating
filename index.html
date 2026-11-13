@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Draft Seating">
+<meta name="theme-color" content="#111111">
+<title>Magic Draft Seating</title>
+<style>
+  :root { --ink:#111; --muted:#6b6b6b; --line:#d9d9d9; --bg:#fafafa; --accent:#d9480f; --card:#fff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 40px; }
+  h1 { font-size: 22px; margin: 4px 0 2px; letter-spacing: -0.3px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+  textarea { width:100%; min-height: 150px; font-size: 16px; padding: 12px; border:1px solid var(--line);
+    border-radius: 12px; background: var(--card); color: var(--ink); resize: vertical; font-family: inherit; }
+  .row { display:flex; gap:8px; margin: 10px 0 4px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 16px; font-weight: 600; padding: 12px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--ink); color: #fff; border-color: var(--ink); flex: 1; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin: 12px 0 0; }
+  .chip { font-size: 14px; font-weight: 500; padding: 7px 11px; border-radius: 999px; }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #out { margin-top: 14px; background: var(--card); border:1px solid var(--line); border-radius: 16px; padding: 8px; }
+  #out svg { width: 100%; height: auto; display: block; }
+  .empty { color: var(--muted); text-align:center; padding: 40px 10px; font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Magic Draft Seating</h1>
+  <p class="sub">Paste the draft list. The featured drafter sits at 12 o'clock, everyone else clockwise in draft order.</p>
+
+  <textarea id="list" placeholder="1 Samuel Chang&#10;2 Joao Quege&#10;3 Nick Deriu&#10;...&#10;6 Seth Manfield (Featured drafter)" autocapitalize="words" autocomplete="off" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="primary" id="paste">Paste list</button>
+    <button id="save">Save image</button>
+    <button id="clear">Clear</button>
+  </div>
+  <p class="hint">Tip: in Photos, press and hold the list in your screenshot, choose Copy, then tap Paste list. Tap a name below to change the featured drafter.</p>
+  <div class="chips" id="chips"></div>
+  <div id="out"><div class="empty">The seating circle appears here.</div></div>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const ta = $('list'), out = $('out'), chips = $('chips');
+  let featuredOverride = null;   // index into players, set by tapping a chip
+  let lastSvg = null;
+
+  const FEATURE_RE = /\(?\s*featured(\s+drafter)?\s*\)?/i;
+
+  function titleCase(s) {
+    // Only fix names typed all upper or all lower; keep mixed case as written.
+    if (s !== s.toUpperCase() && s !== s.toLowerCase()) return s;
+    return s.toLowerCase().replace(/(^|[\s\-'])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  }
+
+  function parse(text) {
+    const raw = text.split(/\r?\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    // Live Text sometimes puts the number on its own line; join "6" + "Seth Manfield".
+    const lines = [];
+    for (let i = 0; i < raw.length; i++) {
+      if (/^\d{1,2}[.)]?$/.test(raw[i]) && raw[i + 1] && !/^\d{1,2}[.)]?$/.test(raw[i + 1])) {
+        lines.push(raw[i] + ' ' + raw[i + 1]); i++;
+      } else lines.push(raw[i]);
+    }
+    const players = [];
+    lines.forEach((line, idx) => {
+      let featured = FEATURE_RE.test(line);
+      let s = line.replace(FEATURE_RE, '').trim();
+      if (/^\*.*\*$/.test(s)) { s = s.slice(1, -1).trim(); }
+      const m = s.match(/^(\d{1,2})[.)\-:]?\s+(.+)$/);
+      const num = m ? parseInt(m[1], 10) : null;
+      let name = (m ? m[2] : s).replace(/^[-•·\s]+/, '').trim();
+      if (!name || /^\d+$/.test(name)) return;
+      name = titleCase(name);
+      players.push({ num, name, featured, order: idx });
+    });
+    // Sort by draft number when every row has one; otherwise keep list order.
+    if (players.length && players.every(p => p.num != null)) players.sort((a, b) => a.num - b.num);
+    players.forEach((p, i) => { if (p.num == null) p.num = i + 1; });
+    return players;
+  }
+
+  function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+  function render() {
+    const players = parse(ta.value);
+    chips.innerHTML = '';
+    if (players.length < 2) {
+      out.innerHTML = '<div class="empty">The seating circle appears here.</div>'; lastSvg = null; return;
+    }
+    let f = players.findIndex(p => p.featured);
+    if (featuredOverride != null && featuredOverride < players.length) f = featuredOverride;
+    if (f < 0) f = 0;
+
+    players.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.className = 'chip' + (i === f ? ' on' : '');
+      b.textContent = p.num + ' ' + p.name.split(' ')[0];
+      b.onclick = () => { featuredOverride = i; render(); };
+      chips.appendChild(b);
+    });
+
+    // Seat k (0 = 12 o'clock) clockwise, starting with the featured drafter.
+    const n = players.length, W = 600, H = 640, cx = 300, cy = 330, R = 150, LR = 235;
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="-apple-system, Helvetica Neue, Helvetica, Arial, sans-serif">`;
+    svg += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+    svg += `<text x="${cx}" y="42" text-anchor="middle" font-size="22" font-weight="700" fill="#111">Magic Draft Seating</text>`;
+    svg += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#bdbdbd" stroke-width="3"/>`;
+    svg += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="15" fill="#888">Featured at 12</text>`;
+    svg += `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="15" fill="#888">then clockwise</text>`;
+    for (let k = 0; k < n; k++) {
+      const p = players[(f + k) % n];
+      const a = -Math.PI / 2 + (2 * Math.PI * k) / n;
+      const sx = cx + R * Math.cos(a), sy = cy + R * Math.sin(a);
+      const lx = cx + LR * Math.cos(a), ly = cy + LR * Math.sin(a);
+      const isF = k === 0;
+      const first = p.name.split(' ')[0];
+      const rest = p.name.split(' ').slice(1).join(' ');
+      const color = isF ? '#d9480f' : '#111';
+      svg += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${isF ? 11 : 8}" fill="${color}"/>`;
+      svg += `<text x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}" text-anchor="middle" font-size="${isF ? 30 : 27}" font-weight="700" fill="${color}">${esc(first)}</text>`;
+      svg += `<text x="${lx.toFixed(1)}" y="${(ly + 20).toFixed(1)}" text-anchor="middle" font-size="15" fill="#666">#${p.num}${rest ? ' · ' + esc(rest) : ''}${isF ? ' · featured' : ''}</text>`;
+    }
+    svg += `</svg>`;
+    out.innerHTML = svg; lastSvg = svg;
+  }
+
+  async function saveImage() {
+    if (!lastSvg) return;
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(lastSvg);
+    await img.decode();
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 1280;
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const file = new File([blob], 'draft-seating.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Draft seating' }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'draft-seating.png'; a.click();
+  }
+
+  ta.addEventListener('input', () => { featuredOverride = null; render(); });
+  $('paste').onclick = async () => {
+    try { ta.value = await navigator.clipboard.readText(); featuredOverride = null; render(); }
+    catch (e) { ta.focus(); }
+  };
+  $('clear').onclick = () => { ta.value = ''; featuredOverride = null; render(); ta.focus(); };
+  $('save').onclick = saveImage;
+  render();
+})();
+</script>
+</body>
+</html>
