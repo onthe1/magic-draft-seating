@@ -27,6 +27,9 @@
   .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   #out { margin-top: 14px; background: var(--card); border:1px solid var(--line); border-radius: 16px; padding: 8px; }
   #out svg { width: 100%; height: auto; display: block; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background:#111; color:#fff;
+    padding: 12px 16px; border-radius: 12px; font-size: 15px; opacity: 0; transition: opacity .2s; pointer-events:none; max-width: 90vw; text-align:center; }
+  #toast.show { opacity: 1; }
   .empty { color: var(--muted); text-align:center; padding: 40px 10px; font-size: 15px; }
 </style>
 </head>
@@ -41,7 +44,7 @@
     <button id="save">Save image</button>
     <button id="clear">Clear</button>
   </div>
-  <p class="hint">Tip: in Photos, press and hold the list in your screenshot, choose Copy, then paste it in the box. Tap Text to send the seating chart in Messages. Tap a name below to change the featured drafter.</p>
+  <p class="hint">Tip: in Photos, press and hold the list in your screenshot, choose Copy, then paste it in the box. Tap Text to copy the chart and open a new message, then paste. Tap a name below to change the featured drafter.</p>
   <div class="chips" id="chips"></div>
   <div id="out"><div class="empty">The seating circle appears here.</div></div>
 </main>
@@ -133,19 +136,6 @@
     out.innerHTML = svg; lastSvg = svg;
   }
 
-  function seatingText() {
-    const players = parse(ta.value); if (players.length < 2) return '';
-    let f = players.findIndex(p => p.featured);
-    if (featuredOverride != null && featuredOverride < players.length) f = featuredOverride;
-    if (f < 0) f = 0;
-    const lines = [];
-    for (let k = 0; k < players.length; k++) {
-      const p = players[(f + k) % players.length];
-      lines.push((k === 0 ? '12:00 ' : '') + p.name + ' (#' + p.num + ')' + (k === 0 ? ' featured' : ''));
-    }
-    return 'Draft seating, clockwise from 12:\n' + lines.join('\n');
-  }
-
   async function pngFile() {
     const img = new Image();
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(lastSvg);
@@ -156,14 +146,26 @@
     return new File([blob], 'draft-seating.png', { type: 'image/png' });
   }
 
+  function toast(msg) {
+    let t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.className = 'show';
+    clearTimeout(t._h); t._h = setTimeout(() => { t.className = ''; }, 4000);
+  }
+
   async function textIt() {
     if (!lastSvg) { ta.focus(); return; }
-    const file = await pngFile();
-    const text = seatingText();
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], text }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    const blobPromise = pngFile().then(f => new Blob([f], { type: 'image/png' }));
+    try {
+      // Safari needs clipboard.write called right inside the tap, with a promise for the image.
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+      toast('Image copied. Paste it into the new message.');
+      setTimeout(() => { location.href = 'sms:'; }, 300);
+    } catch (e) {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(await blobPromise);
+      a.download = 'draft-seating.png'; a.click();
+      toast('Could not copy here. Image saved instead; attach it to your text.');
     }
-    location.href = 'sms:&body=' + encodeURIComponent(text);
   }
 
   async function saveImage() {
