@@ -110,7 +110,7 @@
     });
 
     // Seat k (0 = 12 o'clock) clockwise, starting with the featured drafter.
-    const n = players.length, W = 600, H = 640, cx = 300, cy = 330, R = 150, LR = 235;
+    const n = players.length, W = 680, H = 670, cx = 340, cy = 350, R = 140, LR = 232;
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="-apple-system, Helvetica Neue, Helvetica, Arial, sans-serif">`;
     svg += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
     svg += `<text x="${cx}" y="42" text-anchor="middle" font-size="22" font-weight="700" fill="#111">Magic Draft Seating</text>`;
@@ -126,8 +126,10 @@
       const rest = p.name.split(' ').slice(1).join(' ');
       const color = isF ? '#d9480f' : '#111';
       svg += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${isF ? 11 : 8}" fill="${color}"/>`;
-      svg += `<text x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}" text-anchor="middle" font-size="${isF ? 30 : 27}" font-weight="700" fill="${color}">${esc(first)}</text>`;
-      svg += `<text x="${lx.toFixed(1)}" y="${(ly + 20).toFixed(1)}" text-anchor="middle" font-size="15" fill="#666">#${p.num}${rest ? ' · ' + esc(rest) : ''}${isF ? ' · featured' : ''}</text>`;
+      const x = lx.toFixed(1);
+      svg += `<text x="${x}" y="${(ly - 4).toFixed(1)}" text-anchor="middle" font-size="29" font-weight="700" fill="${color}"><tspan fill="#9a9a9a">${p.num}</tspan> ${esc(first)}</text>`;
+      if (rest) svg += `<text x="${x}" y="${(ly + 27).toFixed(1)}" text-anchor="middle" font-size="29" font-weight="700" fill="${color}">${esc(rest)}</text>`;
+      if (isF) svg += `<text x="${x}" y="${(ly + (rest ? 49 : 18)).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="1" fill="#d9480f">FEATURED</text>`;
     }
     svg += `</svg>`;
     out.innerHTML = svg; lastSvg = svg;
@@ -137,7 +139,7 @@
     const img = new Image();
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(lastSvg);
     await img.decode();
-    const c = document.createElement('canvas'); c.width = 1200; c.height = 1280;
+    const c = document.createElement('canvas'); c.width = 1360; c.height = 1340;
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     const blob = await new Promise(r => c.toBlob(r, 'image/png'));
     return new File([blob], 'draft-seating.png', { type: 'image/png' });
@@ -157,7 +159,7 @@
     const img = new Image();
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(lastSvg);
     await img.decode();
-    const c = document.createElement('canvas'); c.width = 1200; c.height = 1280;
+    const c = document.createElement('canvas'); c.width = 1360; c.height = 1340;
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     const blob = await new Promise(r => c.toBlob(r, 'image/png'));
     const file = new File([blob], 'draft-seating.png', { type: 'image/png' });
