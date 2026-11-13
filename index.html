@@ -143,7 +143,7 @@
       else y = ly + 9 - (isF ? 10 : 0);
       svg += `<text x="${lx.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" font-size="31" font-weight="600" fill="${color}">`
            + `<tspan fill="${isF ? T.accent : T.muted}" font-weight="500">${p.num}</tspan><tspan dx="7">${esc(p.name)}</tspan></text>`;
-      if (isF) svg += `<text x="${lx.toFixed(1)}" y="${(y + 26).toFixed(1)}" text-anchor="${anchor}" font-size="20" font-weight="500" letter-spacing="0.6" fill="${T.accent}">Featured drafter</text>`;
+      if (isF) svg += `<text x="${lx.toFixed(1)}" y="${(y + 26).toFixed(1)}" text-anchor="${anchor}" font-size="20" font-weight="500" letter-spacing="0.6" fill="${T.accent}">(Featured)</text>`;
     }
     svg += `</svg>`;
     out.innerHTML = svg; lastSvg = svg;
